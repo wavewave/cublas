@@ -68,8 +68,8 @@ runConfigureScript verbosity backwardsCompatHack flags lbi = do
   (ccProg, ccFlags) <- configureCCompiler verbosity (withPrograms lbi)
 
   let env' = foldr appendToEnvironment env
-               [("CC",       ccProg)
-               ,("CFLAGS",   unwords ccFlags)
+               [ -- ("CC",       ccProg)
+                ("CFLAGS",   unwords ccFlags)
                ,("CPPFLAGS", unwords $ map ("-I"++) (configExtraIncludeDirs flags))
                ,("LDFLAGS",  unwords $ map ("-L"++) (configExtraLibDirs flags))
                ]
