@@ -1,6 +1,7 @@
 { mkDerivation, base, cuda, filepath, language-c
 , stdenv, storable-complex, template-haskell
 , cudatoolkit
+, autoconf
 }:
 mkDerivation {
   pname = "cublas";
@@ -9,6 +10,7 @@ mkDerivation {
   libraryHaskellDepends = [
     base cuda filepath language-c storable-complex template-haskell
   ];
+  buildDepends = [ autoconf ];
   librarySystemDepends = [ cudatoolkit ]; #[ cublas cusparse ];
   homepage = "https://github.com/bmsherman/cublas";
   description = "FFI bindings to the CUDA CUBLAS and CUSPARSE libraries";

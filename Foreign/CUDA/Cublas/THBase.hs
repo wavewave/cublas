@@ -32,7 +32,7 @@ maybeExternalDec _ = Nothing
 
 getExternalDecls :: FilePath -> IO [CDecl]
 getExternalDecls fp = do
-  Right (CTranslUnit xs _) <- parseCFile (newGCC "/usr/bin/gcc") Nothing [] fp
+  Right (CTranslUnit xs _) <- parseCFile (newGCC "gcc") Nothing [] fp
   return $ mapMaybe maybeExternalDec xs
 
 stripSuffix :: String -> String -> Maybe String
