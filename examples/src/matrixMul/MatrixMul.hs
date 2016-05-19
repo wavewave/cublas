@@ -188,8 +188,17 @@ matMultCUBLAS xs' ys' = doMult undefined xs' ys'
             -}
 
 
-scaleCUBLAS :: Vector CFloat -> IO (Vector CFloat) -- (Matrix CFloat)
-scaleCUBLAS xs = do
+
+test_cuda_memset :: Int -> IO (Vector CFloat)
+test_cuda_memset n = do
+    CUDA.allocaArray n $ \d_zs -> do
+      CUDA.memset d_zs (fromIntegral (sizeOf (undefined :: CFloat) * n)) 0
+      zs <- newArray_ (1,n)
+      withStorableArray zs $ \p -> CUDA.peekArray n d_zs p
+      return zs
+      
+test_cublas_scale :: Vector CFloat -> IO (Vector CFloat) -- (Matrix CFloat)
+test_cublas_scale xs = do
     (li, lf)  <- getBounds xs
     let wx = rangeSize (li,lf)
 
@@ -201,7 +210,7 @@ scaleCUBLAS xs = do
       print wx
       CUBLAS.scal hdl 10 10.0 d_xs 1
       zs <- newArray_ (li,lf)
-      withStorableArray zs $ \p -> CUDA.peekArray 10 d_xs p
+      withStorableArray zs $ \p -> CUDA.peekArray wx d_xs p
       CUBLAS.destroy hdl
       return zs
 
@@ -227,18 +236,31 @@ scaleCUBLAS xs = do
 
 main :: IO ()
 main = do
-  dev   <- CUDA.get
-  props <- CUDA.props dev
-  putStrLn $ "Using device " ++ show dev ++ ": " ++ CUDA.deviceName props
+    test0
+    line
+    test1
+    line
+    test2
 
+line = putStrLn "==================="
+
+test0 = do
+    dev   <- CUDA.get
+    props <- CUDA.props dev
+    putStrLn $ "Using device " ++ show dev ++ ": " ++ CUDA.deviceName props
+
+test1 = do
+  xs <- test_cuda_memset 32
+  mapM_ print =<< getElems xs
+
+test2 = do
   xs <- randomArr (1,10)
-  
-  xs' <- scaleCUBLAS xs
-
+  xs' <- test_cublas_scale xs
   xlst  <- getElems xs
   x'lst <- getElems xs'
-
   mapM_ print $ zip xlst x'lst
+
+
   
   {- 
 
