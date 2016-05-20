@@ -144,41 +144,14 @@ test_cublas_gemm hdl xs ys = do
 
 test_cublas_gemm' :: CUBLAS.Handle -> (Int,Int) -> (Int,Int) -> IO ()
 test_cublas_gemm' hdl (colx,rowx) (coly,rowy) = do
-    --((li, lj), (ui, uj))  <- getBounds xs
-    --((li',lj'),(ui',uj')) <- getBounds ys
-    --let rowx = rangeSize (lj,uj)
-    --    colx = rangeSize (li,ui)
-    --    rowy = rangeSize (lj',uj')
-    --    coly = rangeSize (li',ui')
-    --    resBnds | colx == rowy  = ((li',lj),(ui',uj))
-    --            | otherwise = error "matrix dimensions must agree"
     CUDA.allocaArray (rowx*colx) $ \d_xs -> do
       CUDA.allocaArray (rowy*coly) $ \d_ys -> do
         CUDA.allocaArray (rowx*coly) $ \(d_zs :: CUDA.DevicePtr CFloat) -> do
-
-          {- 
-          withMatrix xs $ \p_xs -> do
-            CUBLAS.cublasSetMatrix (fromIntegral rowx) (fromIntegral colx)
-              (fromIntegral (sizeOf (undefined :: Float)))
-              (castPtr p_xs) (fromIntegral rowx)
-              (castPtr (CUDA.useDevicePtr d_xs)) (fromIntegral rowx) 
-          withMatrix ys $ \p_ys -> do
-            CUBLAS.cublasSetMatrix (fromIntegral rowy) (fromIntegral coly)
-              (fromIntegral (sizeOf (undefined :: Float)))
-              (castPtr p_ys) (fromIntegral rowy)
-              (castPtr (CUDA.useDevicePtr d_ys)) (fromIntegral rowy) 
-          -}
-          
           CUDA.memset d_xs (fromIntegral (sizeOf (undefined :: CFloat)*rowx*colx)) 1
           CUDA.memset d_ys (fromIntegral (sizeOf (undefined :: CFloat)*rowy*coly)) 2
           CUDA.memset d_zs (fromIntegral (sizeOf (undefined :: CFloat)*rowx*coly)) 0
 
           CUBLAS.gemm hdl CUBLAS.N CUBLAS.N rowx coly rowy 1.0 d_xs rowx d_ys rowy 0.0 d_zs rowx
-          -- CUBLAS.destroy hdl
-
-          -- zs <- newArray_ resBnds
-          -- withStorableArray zs $ \p -> CUDA.peekArray (rowx*coly) d_zs p
-          -- return zs
           return ()
 
 
@@ -287,37 +260,4 @@ test6 = do
     CUBLAS.destroy hdl
 
 
-{- 
-    ref <- matMult xs ys
-  -- mat <- matMultCUDA xs ys 
-  mat' <- matMultCUBLAS xs ys
-
-  xlst <- getElems xs
-  reflst <- getElems ref
-  -- matlst <- getElems mat
-  mat'lst <- getElems mat'
-  
-  let f x y = abs ((x-y)/(x+y+epsilon))
-      epsilon = 0.0005
-  -- return ()
-  mapM_ print $ zip xlst mat'lst
-  -- mapM_ print  . filter (\(x,y,z)-> z > 0.0005) $ (zipWith (\x y -> (x,y,f x y)) reflst mat'lst)
-  -}
-  
-  -- print =<< take 5 <$> getElems ref
-  -- print =<< take 5 <$> getElems mat
-
-
-  {- 
-  putStr   "== Reference: " >> hFlush stdout
-  (tr,ref) <- benchmark 100 (matMult xs ys) (return ())
-  putStrLn $  shows (fromInteger (timeIn millisecond tr) / 100::Float) " ms"
-
-  putStr   "== CUDA: " >> hFlush stdout
-  (tc,mat) <- benchmark 100 (matMultCUDA xs ys) (CUDA.sync)
-  putStrLn $  shows (fromInteger (timeIn millisecond tc) / 100::Float) " ms"
-
-  putStr "== Validating: "
-  verify ref mat >>= \rv -> putStrLn $ if rv then "Ok!" else "INVALID!"
-  -}
  
