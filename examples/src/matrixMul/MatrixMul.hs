@@ -121,7 +121,7 @@ test_cublas_gemm xs ys = do
                 | otherwise = error "matrix dimensions must agree"
     CUDA.allocaArray (rowx*colx) $ \d_xs -> do
       CUDA.allocaArray (rowy*coly) $ \d_ys -> do
-        CUDA.allocaArray (rowx*coly) $ \d_zs -> do
+        CUDA.allocaArray (rowx*coly) $ \(d_zs :: CUDA.DevicePtr CFloat) -> do
           hdl <- CUBLAS.create
           withMatrix xs $ \p_xs -> do
             CUBLAS.cublasSetMatrix (fromIntegral rowx) (fromIntegral colx)
@@ -147,7 +147,7 @@ test_cublas_gemm xs ys = do
 main :: IO ()
 main = do
     test0 >> line >> test1 >> line >> test2 >> line >> test3 >> line
-    test4 >> line >> test5
+    test4 >> line >> test5 >> line >> test6
 
 line :: IO ()
 line = putStrLn "==================="
@@ -224,13 +224,25 @@ test5 = do
     putStrLn "------------"
     printMatrixT zs
   
-  
-  {- 
 
-  xs <- randomArr ((1,1),(16,16))-- ((1,1),(8*BLOCK_SIZE, 4*BLOCK_SIZE)) :: IO (Matrix CFloat)
-  ys <- randomArr ((1,1),(16,16))  -- ((1,1),(4*BLOCK_SIZE,12*BLOCK_SIZE)) :: IO (Matrix CFloat)
+test6 :: IO ()
+test6 = do
+    putStrLn "CUBLAS speed test"
 
-  ref <- matMult xs ys
+    xs <- randomArr ((1,1),(4*BLOCK_SIZE, 8*BLOCK_SIZE)) :: IO (Matrix CFloat)
+    ys <- randomArr ((1,1),(12*BLOCK_SIZE,4*BLOCK_SIZE)) :: IO (Matrix CFloat)
+
+    putStr   "== Reference: " >> hFlush stdout
+    (tr,ref) <- benchmark 100 (matMult xs ys) (return ())
+    putStrLn $  shows (fromInteger (timeIn millisecond tr) / 100::Float) " ms"
+
+    putStr   "== CUBLAS: " >> hFlush stdout
+    (tc,mat) <- benchmark 100 (test_cublas_gemm xs ys) (CUDA.sync)
+    putStrLn $  shows (fromInteger (timeIn millisecond tc) / 100::Float) " ms"
+
+
+{- 
+    ref <- matMult xs ys
   -- mat <- matMultCUDA xs ys 
   mat' <- matMultCUBLAS xs ys
 
@@ -244,7 +256,7 @@ test5 = do
   -- return ()
   mapM_ print $ zip xlst mat'lst
   -- mapM_ print  . filter (\(x,y,z)-> z > 0.0005) $ (zipWith (\x y -> (x,y,f x y)) reflst mat'lst)
-  
+  -}
   
   -- print =<< take 5 <$> getElems ref
   -- print =<< take 5 <$> getElems mat
@@ -262,4 +274,4 @@ test5 = do
   putStr "== Validating: "
   verify ref mat >>= \rv -> putStrLn $ if rv then "Ok!" else "INVALID!"
   -}
-  -}
+ 
