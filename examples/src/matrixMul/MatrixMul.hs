@@ -44,12 +44,12 @@ matMult mx my = do
   y <- unsafeFreeze my
   let ((li, lj), (ui, uj))  = bounds x
       ((li',lj'),(ui',uj')) = bounds y
-      resBnds | (lj,uj) == (li',ui') = ((li,lj'),(ui,uj'))
+      resBnds | (li,ui) == (lj',uj') = ((lj,li'),(uj,ui'))
               | otherwise            = error "matrix dimensions must agree"
 
-  newListArray resBnds [sum [x!(i,k) * y!(k,j) | k <- range (lj,uj)]
-                         | i <- range (li,ui)
-                         , j <- range (lj',uj') ]
+  newListArray resBnds [sum [x!(k,j) * y!(i,k) | k <- range (li,ui)]
+                         | i <- range (li',ui')
+                         , j <- range (lj,uj) ] 
 
 
 test_cuda_memset :: Int -> IO (Vector CFloat)
@@ -113,34 +113,34 @@ test_cublas_gemm :: Matrix CFloat -> Matrix CFloat -> IO (Matrix CFloat)
 test_cublas_gemm xs ys = do
     ((li, lj), (ui, uj))  <- getBounds xs
     ((li',lj'),(ui',uj')) <- getBounds ys
-    let wx = rangeSize (lj,uj)
-        hx = rangeSize (li,ui)
-        wy = rangeSize (lj',uj')
-        hy = rangeSize (li',ui')
-        resBnds | wx == hy  = ((li,lj'),(ui,uj'))
+    let rowx = rangeSize (lj,uj)
+        colx = rangeSize (li,ui)
+        rowy = rangeSize (lj',uj')
+        coly = rangeSize (li',ui')
+        resBnds | colx == rowy  = ((li',lj),(ui',uj))
                 | otherwise = error "matrix dimensions must agree"
-    CUDA.allocaArray (wx*hx) $ \d_xs -> do
-      CUDA.allocaArray (wy*hy) $ \d_ys -> do
-        CUDA.allocaArray (wy*hx) $ \d_zs -> do
+    CUDA.allocaArray (rowx*colx) $ \d_xs -> do
+      CUDA.allocaArray (rowy*coly) $ \d_ys -> do
+        CUDA.allocaArray (rowx*coly) $ \d_zs -> do
           hdl <- CUBLAS.create
           withMatrix xs $ \p_xs -> do
-            CUBLAS.cublasSetMatrix (fromIntegral wx) (fromIntegral hx)
+            CUBLAS.cublasSetMatrix (fromIntegral rowx) (fromIntegral colx)
               (fromIntegral (sizeOf (undefined :: Float)))
-              (castPtr p_xs) (fromIntegral wx)
-              (castPtr (CUDA.useDevicePtr d_xs)) (fromIntegral wx) 
+              (castPtr p_xs) (fromIntegral rowx)
+              (castPtr (CUDA.useDevicePtr d_xs)) (fromIntegral rowx) 
           withMatrix ys $ \p_ys -> do
-            CUBLAS.cublasSetMatrix (fromIntegral wy) (fromIntegral hy)
+            CUBLAS.cublasSetMatrix (fromIntegral rowy) (fromIntegral coly)
               (fromIntegral (sizeOf (undefined :: Float)))
-              (castPtr p_ys) (fromIntegral wy)
-              (castPtr (CUDA.useDevicePtr d_ys)) (fromIntegral wy) 
+              (castPtr p_ys) (fromIntegral rowy)
+              (castPtr (CUDA.useDevicePtr d_ys)) (fromIntegral rowy) 
 
-          CUDA.memset d_zs (fromIntegral (sizeOf (undefined :: CFloat)*wx*hy)) 0
+          CUDA.memset d_zs (fromIntegral (sizeOf (undefined :: CFloat)*rowx*coly)) 0
 
-          CUBLAS.gemm hdl CUBLAS.T CUBLAS.T hx wy hy 1.0 d_xs hx d_ys wy 0.0 d_zs hx
+          CUBLAS.gemm hdl CUBLAS.N CUBLAS.N rowx coly rowy 1.0 d_xs rowx d_ys rowy 0.0 d_zs rowx
           CUBLAS.destroy hdl
 
           zs <- newArray_ resBnds
-          withStorableArray zs $ \p -> CUDA.peekArray (hx*wy) d_zs p
+          withStorableArray zs $ \p -> CUDA.peekArray (rowx*coly) d_zs p
           return zs
 
 
@@ -164,9 +164,9 @@ printMatrix zs = do
 printMatrixT :: Matrix CFloat -> IO ()
 printMatrixT zs = do
     ((li,lj),(ui,uj)) <- getBounds zs
-    forM_ [li..ui] $ \i -> do
-      forM_ [lj..uj] $ \j -> do
-        n <- readArray zs (j,i)
+    forM_ [lj..uj] $ \j -> do
+      forM_ [li..ui] $ \i -> do
+        n <- readArray zs (i,j)
         putStr (show n ++ " ")
       putStrLn ""
 
@@ -216,11 +216,11 @@ test4 = do
 test5 :: IO ()
 test5 = do
     putStrLn "CUBLAS gemm test"
-    xs <- randomArr ((1,1),(12,4))
-    ys <- randomArr ((1,1),(4,8))
+    xs <- randomArr ((1,1),(4,12))
+    ys <- randomArr ((1,1),(8,4))
     zs0 <- matMult xs ys
     zs <- test_cublas_gemm xs ys
-    printMatrix zs0
+    printMatrixT zs0
     putStrLn "------------"
     printMatrixT zs
   
