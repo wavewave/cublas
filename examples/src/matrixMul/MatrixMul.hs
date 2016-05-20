@@ -109,8 +109,8 @@ test_cublas_setMatrix xs = do
       return zs
 
 
-test_cublas_gemm :: Matrix CFloat -> Matrix CFloat -> IO (Matrix CFloat)
-test_cublas_gemm xs ys = do
+test_cublas_gemm :: CUBLAS.Handle -> Matrix CFloat -> Matrix CFloat -> IO (Matrix CFloat)
+test_cublas_gemm hdl xs ys = do
     ((li, lj), (ui, uj))  <- getBounds xs
     ((li',lj'),(ui',uj')) <- getBounds ys
     let rowx = rangeSize (lj,uj)
@@ -122,7 +122,7 @@ test_cublas_gemm xs ys = do
     CUDA.allocaArray (rowx*colx) $ \d_xs -> do
       CUDA.allocaArray (rowy*coly) $ \d_ys -> do
         CUDA.allocaArray (rowx*coly) $ \(d_zs :: CUDA.DevicePtr CFloat) -> do
-          hdl <- CUBLAS.create
+          -- hdl <- CUBLAS.create
           withMatrix xs $ \p_xs -> do
             CUBLAS.cublasSetMatrix (fromIntegral rowx) (fromIntegral colx)
               (fromIntegral (sizeOf (undefined :: Float)))
@@ -137,7 +137,7 @@ test_cublas_gemm xs ys = do
           CUDA.memset d_zs (fromIntegral (sizeOf (undefined :: CFloat)*rowx*coly)) 0
 
           CUBLAS.gemm hdl CUBLAS.N CUBLAS.N rowx coly rowy 1.0 d_xs rowx d_ys rowy 0.0 d_zs rowx
-          CUBLAS.destroy hdl
+          -- CUBLAS.destroy hdl
 
           zs <- newArray_ resBnds
           withStorableArray zs $ \p -> CUDA.peekArray (rowx*coly) d_zs p
@@ -219,7 +219,9 @@ test5 = do
     xs <- randomArr ((1,1),(4,12))
     ys <- randomArr ((1,1),(8,4))
     zs0 <- matMult xs ys
-    zs <- test_cublas_gemm xs ys
+    hdl <- CUBLAS.create
+    zs <- test_cublas_gemm hdl xs ys
+    CUBLAS.destroy hdl
     printMatrixT zs0
     putStrLn "------------"
     printMatrixT zs
@@ -228,6 +230,7 @@ test5 = do
 test6 :: IO ()
 test6 = do
     putStrLn "CUBLAS speed test"
+    hdl <- CUBLAS.create
 
     xs <- randomArr ((1,1),(4*BLOCK_SIZE, 8*BLOCK_SIZE)) :: IO (Matrix CFloat)
     ys <- randomArr ((1,1),(12*BLOCK_SIZE,4*BLOCK_SIZE)) :: IO (Matrix CFloat)
@@ -237,8 +240,10 @@ test6 = do
     putStrLn $  shows (fromInteger (timeIn millisecond tr) / 100::Float) " ms"
 
     putStr   "== CUBLAS: " >> hFlush stdout
-    (tc,mat) <- benchmark 100 (test_cublas_gemm xs ys) (CUDA.sync)
+    (tc,mat) <- benchmark 100 (test_cublas_gemm hdl xs ys) (CUDA.sync)
     putStrLn $  shows (fromInteger (timeIn millisecond tc) / 100::Float) " ms"
+
+    CUBLAS.destroy hdl
 
 
 {- 
